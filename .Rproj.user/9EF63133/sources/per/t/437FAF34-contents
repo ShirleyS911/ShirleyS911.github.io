@@ -1,0 +1,21 @@
+name: "my-website"
+output_dir: "docs"
+
+navbar:
+  title: "503 Portfolio"
+  left:
+    - text: "Home"
+      href: index.html
+    - text: "About"
+      href: about.html
+    - text: "Project"
+      href: 503Project.html
+    - text: "A7"
+      href: networks1.html
+    - text: "A6"
+      href: geospatial.html
+      
+output:
+  html_document:
+    highlight: textmate
+    theme: flatly
