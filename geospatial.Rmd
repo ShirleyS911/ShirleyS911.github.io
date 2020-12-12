@@ -1,0 +1,316 @@
+---
+title: "A6-ShiyingSun"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE)
+```
+
+```{r}
+
+#install.nyckages("rlang",dependencies = TRUE, repos = "http://cran.us.r-project.org")
+#install.nyckages("tidyverse",dependencies = TRUE, repos = "http://cran.us.r-project.org")
+#install.nyckages('rmapshaper')
+```
+
+```{r,include=FALSE}
+library(tidyverse)
+library(dplyr)
+library(tidyr)
+library(plotly)
+library(readxl)
+library(sf)
+library(plotly)
+library(rjson)
+library(geojsonio)
+library(ggplot2)
+library(usmap)
+library(rgdal)
+library(spdplyr)
+library(rmapshaper)
+
+
+countypres = read_csv("data/countypres_2000-2016.csv")
+unemploy = read_excel("data/Unemployment.xls", sheet="Unemployment Med HH Income",range = cell_rows(8:3283))
+us <- st_read("data/tl_2019_us_county-1/tl_2019_us_county.shp")
+```
+
+```{r,include=FALSE}
+
+il <- us[us$STATEFP=="17",]
+ny <- us[us$STATEFP=="36",]
+va <- us[us$STATEFP=="51",]
+
+il_json <- geojson_json(il)
+ny_json <- geojson_json(ny)
+va_json <- geojson_json(va)
+il_sim <- ms_simplify(il_json)
+ny_sim <- ms_simplify(ny_json)
+va_sim <- ms_simplify(va_json)
+
+library(rjson)
+il = rjson::fromJSON(il_sim)
+for(i in 1:length(il[["features"]])){
+  il[["features"]][[i]][['id']] <- il[["features"]][[i]][["properties"]][["GEOID"]]
+}
+
+ny = rjson::fromJSON(ny_sim)
+for(i in 1:length(ny[["features"]])){
+  ny[["features"]][[i]][['id']] <- ny[["features"]][[i]][["properties"]][["GEOID"]]
+}
+
+va = rjson::fromJSON(va_sim)
+for(i in 1:length(va[["features"]])){
+  va[["features"]][[i]][['id']] <- va[["features"]][[i]][["properties"]][["GEOID"]]
+}
+
+countypres$FIPS = apply(countypres["FIPS"], 1, as.character)
+countypres$FIPS = apply(countypres["FIPS"], 1, function(x) ifelse(nchar(x)<=4, paste0('0',x),x))
+
+countypres['prop'] = countypres$candidatevotes/countypres$totalvotes
+countypres = countypres[countypres$year>=2008,]
+
+election.il = countypres[countypres$state=="Illinois",]
+election.ny = countypres[countypres$state=="NewYork",]
+election.va = countypres[countypres$state=="Virginia",]
+
+unemploy.il = unemploy[unemploy$Stabr=="IL",]
+unemploy.ny = unemploy[unemploy$Stabr=="NY",]
+unemploy.va = unemploy[unemploy$Stabr=="VA",]
+
+election.il.dem = election.il[election.il$party=="democrat",]
+election.ny.dem = election.ny[election.ny$party=="democrat",]
+election.va.dem = election.va[election.va$party=="democrat",]
+```
+
+```{r}
+one_map_il <- function(dat) {
+  g <- list(
+  fitbounds = "locations",
+  visible = FALSE
+)
+  plot_geo(dat) %>%
+  add_trace(
+    type="choropleth",z = ~prop, text = ~county, snyn = I(0),geojson=il,
+    locations = ~FIPS
+  ) %>%
+  layout(geo = g)
+}
+
+
+election.il.dem.2008 = election.il.dem[election.il.dem$year==2008,]
+election.il.dem.2012 = election.il.dem[election.il.dem$year==2012,]
+election.il.dem.2016 = election.il.dem[election.il.dem$year==2016,]
+  g <- list(
+  fitbounds = "locations",
+  visible = FALSE
+)
+fig1<- plot_geo(election.il.dem.2008) %>%
+  add_trace(
+    type="choropleth",z = ~prop, text = ~county, snyn = I(0),geojson=il,
+    locations = ~FIPS,
+    showsille=FALSE,
+    showlegend = FALSE
+  ) %>%
+  add_text(x = -115, y = 38, text = "2008", color = I("black"))%>%
+  layout(geo = g,title ="2008 Election")
+
+fig2<- plot_geo(election.il.dem.2012) %>%
+  add_trace(
+    type="choropleth",z = ~prop, text = ~county, snyn = I(0),geojson=il,
+    locations = ~FIPS,
+    showsille=FALSE,
+    showlegend = FALSE
+  ) %>%
+  add_text(x = -115, y = 38, text = "2012", color = I("black"))%>%
+  layout(geo = g,title ="2012 Election")
+
+fig3<- plot_geo(election.il.dem.2016) %>%
+  add_trace(
+    type="choropleth",z = ~prop, text = ~county, snyn = I(0),geojson=il,
+    locations = ~FIPS,
+    showlegend = FALSE
+  ) %>%
+  add_text(x = -115, y = 38, text = "2016", color = I("black"))%>%
+  layout(geo = g, title ="2016 Election") %>% colorbar(title = "Proportion Vote Won", thickness=10)
+
+fig4<- plot_geo(unemploy.il) %>%
+  add_trace(
+    type="choropleth",z = ~Unemployment_rate_2008, text = ~area_name, snyn = I(0),geojson=il,
+    locations = ~FIPStxt,
+    colorsille='Jet',
+    showsille=FALSE,
+    showlegend = FALSE
+  ) %>%
+  add_text(x = -115, y = 38, text = "2008", color = I("black"))%>%
+  layout(geo = g, title ="2008 Unemployment")
+
+fig5<- plot_geo(unemploy.il) %>%
+  add_trace(
+    type="choropleth",z = ~Unemployment_rate_2012, text = ~area_name, snyn = I(0),geojson=il,
+    locations = ~FIPStxt,
+    showsille=FALSE,
+    colorsille='Jet',
+    showlegend = FALSE
+  ) %>%
+  add_text(x = -115, y = 38, text = "2012", color = I("black"))%>%
+  layout(geo = g, title ="2012 Unemployment")
+
+fig6<- plot_geo(unemploy.il) %>%
+  add_trace(
+    type="choropleth",z = ~Unemployment_rate_2016, text = ~area_name, snyn = I(0),geojson=il,
+    locations = ~FIPStxt,
+    colorsille='Jet',
+    showlegend = FALSE
+  ) %>%
+  add_text(x = -115, y = 38, text = "2016", color = I("black"))%>%
+  layout(geo = g, title ="2016 Unemployment") %>% colorbar(title = "Unemployment Rate %", thickness=10,y=0.4)
+
+subplot(fig1,fig2,fig3,fig4,fig5,fig6,nrows = 6) %>% layout(showlegend = FALSE,title="Unemployment and Vote in illinois")
+
+election.ny.dem.2008 = election.ny.dem[election.ny.dem$year==2008,]
+election.ny.dem.2012 = election.ny.dem[election.ny.dem$year==2012,]
+election.ny.dem.2016 = election.ny.dem[election.ny.dem$year==2016,]
+g <- list(
+  fitbounds = "locations",
+  visible = FALSE
+)
+fig1<- plot_geo(election.ny.dem.2008) %>%
+  add_trace(
+    type="choropleth",z = ~prop, text = ~county, snyn = I(0),geojson=ny,
+    locations = ~FIPS,
+    showsille=FALSE,
+    showlegend = FALSE
+  ) %>%
+  add_text(x = -78, y = 42, text = "2008", color = I("black"))%>%
+  layout(geo = g,title ="2008 Election")
+
+fig2<- plot_geo(election.ny.dem.2012) %>%
+  add_trace(
+    type="choropleth",z = ~prop, text = ~county, snyn = I(0),geojson=ny,
+    locations = ~FIPS,
+    showsille=FALSE,
+    showlegend = FALSE
+  ) %>%
+  add_text(x = -78, y = 42, text = "2012", color = I("black"))%>%
+  layout(geo = g,title ="2012 Election")
+
+fig3<- plot_geo(election.ny.dem.2016) %>%
+  add_trace(
+    type="choropleth",z = ~prop, text = ~county, snyn = I(0),geojson=ny,
+    locations = ~FIPS,
+    showlegend = FALSE
+  ) %>%
+  add_text(x = -78, y = 42, text = "2016", color = I("black"))%>%
+  layout(geo = g, title ="2016 Election") %>% colorbar(title = "Proportion Vote Won", thickness=10,len=0.35)
+
+fig4<- plot_geo(unemploy.ny) %>%
+  add_trace(
+    type="choropleth",z = ~Unemployment_rate_2008, text = ~area_name, snyn = I(0),geojson=ny,
+    locations = ~FIPStxt,
+    colorsille='Jet',
+    showsille=FALSE,
+    showlegend = FALSE
+  ) %>%
+  add_text(x = -78, y = 42, text = "2008", color = I("black"))%>%
+  layout(geo = g, title ="2008 Unemployment")
+
+fig5<- plot_geo(unemploy.ny) %>%
+  add_trace(
+    type="choropleth",z = ~Unemployment_rate_2012, text = ~area_name, snyn = I(0),geojson=ny,
+    locations = ~FIPStxt,
+    showsille=FALSE,
+    colorsille='Jet',
+    showlegend = FALSE
+  ) %>%
+  add_text(x = -78, y = 42, text = "2012", color = I("black"))%>%
+  layout(geo = g, title ="2012 Unemployment")
+
+fig6<- plot_geo(unemploy.ny) %>%
+  add_trace(
+    type="choropleth",z = ~Unemployment_rate_2016, text = ~area_name, snyn = I(0),geojson=ny,
+    locations = ~FIPStxt,
+    colorsille='Jet',
+    showlegend = FALSE
+  ) %>%
+  add_text(x = -78, y = 42, text = "2016", color = I("black"))%>%
+  layout(geo = g, title ="2016 Unemployment") %>% colorbar(title = "Unemployment Rate %", thickness=10,y=0.4,len=0.35)
+
+subplot(fig1,fig2,fig3,fig4,fig5,fig6,nrows = 6) %>% layout(showlegend = FALSE,title="Unemployment and Vote in NewYork")
+
+election.va.dem.2008 = election.va.dem[election.va.dem$year==2008,]
+election.va.dem.2012 = election.va.dem[election.va.dem$year==2012,]
+election.va.dem.2016 = election.va.dem[election.va.dem$year==2016,]
+g <- list(
+  fitbounds = "locations",
+  visible = FALSE
+)
+fig1<- plot_geo(election.va.dem.2008) %>%
+  add_trace(
+    type="choropleth",z = ~prop, text = ~county, snyn = I(0),geojson=va,
+    locations = ~FIPS,
+    showsille=FALSE,
+    showlegend = FALSE
+  ) %>%
+  add_text(x = -95, y = 34, text = "2008", color = I("black"))%>%
+  layout(geo = g,title ="2008 Election")
+
+fig2<- plot_geo(election.va.dem.2012) %>%
+  add_trace(
+    type="choropleth",z = ~prop, text = ~county, snyn = I(0),geojson=va,
+    locations = ~FIPS,
+    showsille=FALSE,
+    showlegend = FALSE
+  ) %>%
+  add_text(x = -95, y = 34, text = "2012", color = I("black"))%>%
+  layout(geo = g,title ="2012 Election")
+
+fig3<- plot_geo(election.va.dem.2016) %>%
+  add_trace(
+    type="choropleth",z = ~prop, text = ~county, snyn = I(0),geojson=va,
+    locations = ~FIPS,
+    showlegend = FALSE
+  ) %>%
+  add_text(x = -95, y = 34, text = "2016", color = I("black"))%>%
+  layout(geo = g, title ="2016 Election") %>% colorbar(title = "Proportion Vote Won", thickness=10,len=0.35)
+
+fig4<- plot_geo(unemploy.va) %>%
+  add_trace(
+    type="choropleth",z = ~Unemployment_rate_2008, text = ~area_name, snyn = I(0),geojson=va,
+    locations = ~FIPStxt,
+    colorsille='Jet',
+    showsille=FALSE,
+    showlegend = FALSE
+  ) %>%
+  add_text(x = -95, y = 34, text = "2008", color = I("black"))%>%
+  layout(geo = g, title ="2008 Unemployment")
+
+fig5<- plot_geo(unemploy.va) %>%
+  add_trace(
+    type="choropleth",z = ~Unemployment_rate_2012, text = ~area_name, snyn = I(0),geojson=va,
+    locations = ~FIPStxt,
+    showsille=FALSE,
+    colorsille='Jet',
+    showlegend = FALSE
+  ) %>%
+  add_text(x = -95, y = 34, text = "2012", color = I("black"))%>%
+  layout(geo = g, title ="2012 Unemployment")
+
+fig6<- plot_geo(unemploy.va) %>%
+  add_trace(
+    type="choropleth",z = ~Unemployment_rate_2016, text = ~area_name, snyn = I(0),geojson=va,
+    locations = ~FIPStxt,
+    colorsille='Jet',
+    showlegend = FALSE
+  ) %>%
+  add_text(x = -95, y = 34, text = "2016", color = I("black"))%>%
+  layout(geo = g, title ="2016 Unemployment") %>% colorbar(title = "Unemployment Rate %", thickness=10,y=0.4,len=0.35)
+
+subplot(fig1,fig2,fig3,fig4,fig5,fig6,nrows = 6) %>% layout(showlegend = FALSE,title="Unemployment and Vote in Virginia")
+```
+
+
+
+
+

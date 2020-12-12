@@ -1,0 +1,284 @@
+---
+title: "Shiying Sun 503 Project"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: rows
+    social: menu
+    source_code: embed
+---
+
+```{r setup, include=FALSE}
+#install.packages('highcharter')
+library(highcharter)
+library(dplyr)
+library(viridisLite)
+#install.packages('forecast')
+library(forecast)
+#install.packages('treemap')
+library(treemap)
+library(flexdashboard)
+#install.packages("readxl")
+library("readxl")
+#install.packages('ggmap')
+library(tidyverse)
+library(ggmap)
+#install.packages('reticulate')
+library(reticulate)
+use_python("/usr/bin/python3")
+
+thm <- 
+  hc_theme(
+    colors = c("#1a6ecc", "#434348", "#90ed7d"),
+    chart = list(
+      backgroundColor = "transparent",
+      style = list(fontFamily = "Source Sans Pro")
+    ),
+    xAxis = list(
+      gridLineWidth = 1
+    )
+  )
+
+```
+
+```{r,include=FALSE}
+fund_location = read_excel('Crypto_Fund_List without emails.xlsx')
+```
+
+```{r,include=FALSE}
+key = 'AIzaSyDKtk9baIvHNiELL7RYa4MpWz0xRSrtCws'
+register_google(key = key, write = TRUE)
+fund_location = fund_location %>%
+  filter(City != '')  %>%
+  filter(City != '0') %>%
+  count(City)
+#cities_df <- as.data.frame(fund_location$City)
+locations_df <-geocode(fund_location$City)
+
+locations_df$cnt = fund_location$n
+```
+About
+=======================================================================
+This project demonstrates the Cryptocurrency market over years.
+<br />Datas are obtained in several ways:
+<br />Webscrapping from twitter on people's discussion about Bitcoins;
+<br />Webscrapping from CoinBase on all types of coins' historical data;
+<br />Funds information obtained online.
+<br />The partical transaction information of ETH.
+
+
+
+Funds WorldWide
+=======================================================================
+
+*** 
+   <br />The dataset is not comprehensive due to the lack of transparency of funds infos. But we can treat the dataset as a sample of the geospacial distribution of cryptocurrency funds worldwide. 
+   <br />By using the API provided by google, we can transfer the location of funds to longitude and latitude data and visualize it accordingly.
+
+
+Row {data-height=600}
+-----------------------------------------------------------------------
+
+
+### Bitcoin Funds WorldWide
+
+
+```{r, include=FALSE}
+#map <- openmap(c(70,-179),
+               #c(-70,179),zoom=1)
+# def. map parameters, e.g. def. colors
+# myLocation <- c(179, -50, -179, 70)
+# myMap = get_map(location=myLocation,source="stamen", maptype='watercolor', crop=FALSE, zoom = 5)
+# 
+# ggmap(myMap) + geom_point(aes(x=lon, y=lat, size = cnt), data = locations_df, alpha=.5,color='darkblue')
+```
+
+```{r}
+library(plotly)
+#install.packages('maps')
+library(maps)
+library(ggmap)
+library(MASS)
+library(gridExtra)
+#install.packages("viridis")  # Install
+library("viridis")    
+
+#install.packages('mapproj')# Load
+library(mapproj)
+UK <- map_data("world")
+locations_df$City = fund_location$City
+locations_df <- locations_df %>%
+  arrange(cnt) %>%
+  mutate(name=factor(City, unique(City))) %>%
+  mutate(mytext=paste(
+    "City: ", City, "\n", 
+    "Number of Funds: ", cnt, sep="")
+  )
+
+p <- locations_df %>%
+  ggplot() +
+    geom_polygon(data = UK, aes(x=long, y = lat, group = group), fill="lightblue", alpha=1) +
+    geom_point(aes(x=lon, y=lat, size=cnt, color=cnt, text=mytext, alpha=cnt) ) +
+    scale_size_continuous(range=c(1,5)) +
+    scale_color_viridis(option="inferno", trans="log" ) +
+    scale_alpha_continuous(trans="log") +
+    theme_void() +
+    coord_map() +
+    theme(legend.position = "none")
+
+ 
+p <- ggplotly(p, tooltip="text") %>% layout(xaxis = list(autorange = TRUE),yaxis = list(autorange = TRUE))
+p
+
+```
+
+
+
+Network of ETH Transfers
+=======================================================================
+
+
+*** 
+   The network demonstrats top 200 transactions with the most values among ids. Each node is an ID address. We can tell that the mose valued transactions happens among several centered ID.
+   
+
+### Network of ETH Transfers
+
+
+```{r}
+transfers = read.csv('eth_transfers.csv')
+
+
+per_route <- transfers %>%  
+  group_by(From, To) %>%
+  summarise(weight = sum(Quantity)) %>% 
+  ungroup() %>% arrange(desc(weight))
+per_route = per_route[1:200,]
+
+edges = per_route
+
+sources <- edges %>%
+  distinct(From) %>%
+  rename(label = From)
+
+destinations <- edges %>%
+  distinct(To) %>%
+  rename(label = To)
+
+nodes <- full_join(sources, destinations, by = "label")
+
+nodes <- nodes %>% rowid_to_column("id")
+
+edges <- per_route %>% 
+  left_join(nodes, by = c("From" = "label")) %>% 
+  rename(from = id)
+
+edges <- edges %>% 
+  left_join(nodes, by = c("To" = "label")) %>% 
+  rename(to = id)
+
+
+edges <- mutate(edges)
+#install.packages('network')
+library(network)
+#install.packages('visNetwork')
+library(visNetwork)
+#install.packages('networkD3')
+library(networkD3)
+
+
+visNetwork(nodes, edges)
+
+
+```
+
+
+
+Bitcoin Exploratary
+=======================================================================
+
+
+*** 
+   Bitcoin is the cryptocurrency with the most market value. ETH, second largest cryptocurrenct, is a noticable word that people mentions with Bitcoin.
+   
+
+
+Row {data-height=400}
+------------------------------------------------------------------------------
+
+### Price Over Time
+
+
+```{r}
+
+df = read_csv('btc_all_time.csv')
+df$Date <- as.Date(df$Date,"%d-%m-%y")
+
+p <- ggplot(df, aes(Date, Close))
+p + geom_line(size=0.05,color='darkblue')
+
+
+     
+```
+
+
+### Top Words On Twitter Under Bitcoin Topic
+
+
+```{r}
+#install.packages("wordcloud")
+library(wordcloud)
+#install.packages("RColorBrewer")
+library(RColorBrewer)
+#install.packages('wordcloud2')
+library(wordcloud2)
+
+#install.packages("tm")
+library(tm)
+#Create a vector containing only the text
+tweet = read.csv('twitter.csv')
+text <- tweet$Text
+text = gsub("https\\S*", "", text)
+text = gsub("@\\S*", "", text)
+text = gsub("amp", "", text)
+text = gsub("[\r\n]", "", text)
+text = gsub("[[:punct:]]", "", text)
+# Create a corpus  
+docs <- Corpus(VectorSource(text))
+
+docs <- docs %>%
+  tm_map(removeNumbers) %>%
+  tm_map(removePunctuation) %>%
+  tm_map(stripWhitespace)
+docs <- tm_map(docs, content_transformer(tolower))
+docs <- tm_map(docs, removeWords, stopwords("english"))
+
+dtm <- TermDocumentMatrix(docs) 
+matrix <- as.matrix(dtm) 
+words <- sort(rowSums(matrix),decreasing=TRUE) 
+df <- data.frame(word = names(words),freq=words)
+
+set.seed(1234) # for reproducibility 
+wordcloud(words = df$word, freq = df$freq, min.freq = 1,max.words=200, random.order=FALSE, rot.per=0.35, colors=brewer.pal(12, "Dark2"))
+```
+
+
+### Cryptocurrencies Market Cap
+
+
+```{r}
+market = read.csv('100 List.csv')
+market$Market.Cap <- as.numeric(gsub('[$,]', '', market$Market.Cap))
+market$Price <- as.numeric(gsub('[$,]', '', market$Price))
+market = market %>% arrange(desc(Market.Cap))
+market = market[1:10,]
+
+ggplot(market, aes(x=Name, y=Market.Cap, color=Name)) + 
+        geom_bar(stat="identity", position="dodge", aes(fill=Name), color="blue")  +
+    coord_flip()+
+    geom_text(
+    aes(x = Name, y = Market.Cap, label = Market.Cap), 
+    hjust = -0.5, size = 2,
+    position = position_dodge(width = 1),
+    inherit.aes = TRUE
+  )
+```

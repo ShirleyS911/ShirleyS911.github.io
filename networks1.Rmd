@@ -1,0 +1,108 @@
+---
+title: "A7-ShiyingSun"
+output: html_document
+---
+
+```{r}
+#install.packages('ggraph')
+
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning=FALSE)
+library(tidyverse)
+library(dplyr)
+library(tidyr)
+library(plotly)
+library(sf)
+library(tidygraph)
+library(igraph)
+library(ggplot2)
+library(readxl)
+library(ggraph) 
+library(stringr)
+
+#install.packages('network')
+library(network)
+#install.packages('visNetwork')
+library(visNetwork)
+#install.packages('networkD3')
+library(networkD3)
+
+
+dat = read_excel("data/State_to_State_Migrations_Table_2018.xls",sheet = 1,skip=6)
+dat = dat[complete.cases(dat), ]
+dat = dat[-1,]
+states = dat$...1
+
+df = dat[, (names(dat) %in% states)]
+df[df=="N/A"]<-'0'
+df = as.data.frame( lapply(df, as.numeric))
+
+transformed <- NULL
+for(i in 1:length(states)){
+  for(j in 1:length(states)){
+    if(i != j){
+      transformed<-rbind(transformed,c(states[j], states[i], df[i,j]))
+    }
+  }
+}
+colnames(transformed)<-c("From","To","cnt")
+transformed <- as.data.frame(transformed)
+
+transformed$cnt<-as.numeric(transformed$cnt)
+
+
+# migration <-transformed
+# migration$cnt = as.factor(migration$cnt)
+# #migration = migration[migration["num"]>1000,]
+# graph_migration <- as_tbl_graph(migration)
+# graph_migration <- graph_migration %>%
+#   activate(nodes) %>%
+#   mutate(
+#     title = str_to_title(name),
+#     label = str_replace_all(title, " ", "\n")
+#     )
+```
+
+```{r}
+
+per_route <- transformed %>%  
+  group_by(From, To) %>%
+  summarise(value = sum(cnt)) %>% 
+  ungroup() %>% arrange(desc(value))
+
+
+edges = per_route[1:100,]
+
+sources <- edges %>%
+  distinct(From) %>%
+  rename(label = From)
+
+destinations <- edges %>%
+  distinct(To) %>%
+  rename(label = To)
+
+nodes <- full_join(sources, destinations, by = "label")
+
+nodes <- nodes %>% rowid_to_column("id")
+
+edges <- edges %>%
+  left_join(nodes, by = c("From" = "label")) %>%
+  rename(from = id)
+
+edges <- edges %>%
+  left_join(nodes, by = c("To" = "label")) %>%
+  rename(to = id)
+
+
+edges <- mutate(edges, title = value, arrows = 'to')
+edges$value = NULL
+
+
+visNetwork(nodes, edges) %>% visLegend()
+
+```
+
+
+
